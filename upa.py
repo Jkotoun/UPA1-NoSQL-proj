@@ -1,8 +1,13 @@
 from fileinput import filename
+from time import strptime
+from gridfs import Database
 import xmltodict
-from pymongo import MongoClient, InsertOne
+from pymongo import CursorType, MongoClient, InsertOne
 import os
 import datetime
+from datetime import datetime, tzinfo, timezone
+import dateutil.parser
+
 
 def get_database():
 
@@ -71,7 +76,7 @@ def upsert_train_paths(mongodb_instance, cismessages_dir):
     if upserts:
         train_paths_collection.bulk_write(upserts)
 
-def process_canceled_messages(mongodb_instance, canceledmessages_dir):
+def process_canceled_messages(mongodb_instance:MongoClient, canceledmessages_dir):
     
     train_paths_collection = mongodb_instance["trains_timetable"]
     applied_cancel_messages_collection = mongodb_instance["applied_cancel_messages"]
@@ -95,9 +100,100 @@ def process_canceled_messages(mongodb_instance, canceledmessages_dir):
                     applied_cancel_messages_collection.insert_one(
                         {'cancelMessageFileName': xmlfile})
 
+
+
 def db_upsert_data(mongodb_instance, cismessages_dir, canceledmessages_dir):
     upsert_train_paths(mongodb_instance, cismessages_dir)
-    process_canceled_messages(mongodb_instance, canceledmessages_dir)
+    # process_canceled_messages(mongodb_instance, canceledmessages_dir)
+
+
+def filter_data(collection:Database, from_station:str, to_station:str, datetime_string:str):
+    datetime_obj = datetime.strptime(datetime_string, '%Y-%m-%dT%H:%M:%S')
+    timestring = datetime_obj.strftime("%H:%M:%S")
+    date = datetime(datetime_obj.year, datetime_obj.month, datetime_obj.day)
+    data= collection.aggregate([
+    {
+        '$match': {
+            '$and': [
+                {
+                    'CZPTTCISMessage.CZPTTInformation.CZPTTLocation': {
+                        '$elemMatch': {
+                            'Location.PrimaryLocationName': from_station, 
+                            'TrainActivity.TrainActivityType': '0001', 
+                            'TimingAtLocation.Timing.@TimingQualifierCode': 'ALD', 
+                            'TimingAtLocation.Timing.Time': {
+                                '$gte': timestring
+                            }
+                        }
+                    }
+                }, {
+                    'CZPTTCISMessage.CZPTTInformation.CZPTTLocation': {
+                        '$elemMatch': {
+                            'Location.PrimaryLocationName': to_station, 
+                            'TrainActivity.TrainActivityType': '0001'
+                        }
+                    }
+                }, {
+                    'canceled': {
+                        '$not': {
+                            '$elemMatch': {
+                                'startdate': {
+                                    '$lte': date
+                                }, 
+                                'enddate': {
+                                    '$gte': date
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }, {
+        '$project': {
+            'stops': '$CZPTTCISMessage.CZPTTInformation.CZPTTLocation.Location.PrimaryLocationName', 
+            'times': '$CZPTTCISMessage.CZPTTInformation.CZPTTLocation.TimingAtLocation.Timing', 
+            'idx_start': {
+                '$indexOfArray': [
+                    '$CZPTTCISMessage.CZPTTInformation.CZPTTLocation.Location.PrimaryLocationName', from_station
+                ]
+            }, 
+            'idx_end': {
+                '$indexOfArray': [
+                    '$CZPTTCISMessage.CZPTTInformation.CZPTTLocation.Location.PrimaryLocationName', to_station
+                ]
+            }
+        }
+    }, {
+        '$match': {
+            '$expr': {
+                '$lt': [
+                    '$idx_start', '$idx_end'
+                ]
+            }
+        }
+    }
+])
+    return data
+
+def print_data(cursor:CursorType):
+    def format_time_string(timestring):
+       return dateutil.parser.parse(timestring).strftime("%H:%M:%S")
+
+    for train in cursor:
+        print(f"Train id: {train['_id']}")
+        stops = train["stops"]
+        times = train["times"]
+        for stop,time in zip(stops, times):
+            time_str=""
+            if isinstance(time, list):
+                time_str = f"{format_time_string(time[0]['Time'])} - {format_time_string(time[1]['Time'])}"
+            else:
+                time_str = format_time_string(time["Time"])+"\t"
+            print(f"{time_str}\t{stop}")
+        print("------------------------------------------------------------")
+
+
 
 
 
@@ -106,3 +202,5 @@ if __name__ == "__main__":
     cismessages_dir = './archives'
     canceledmessages_dir = './archives/canceled'
     db_upsert_data(mongodb_instance, cismessages_dir, canceledmessages_dir)
+    cursor = filter_data(mongodb_instance["trains_timetable"], "Třebíč", "Brno hl. n.", "2022-10-22T15:00:0")
+    print_data(cursor)

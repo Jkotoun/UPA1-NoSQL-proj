@@ -1,17 +1,16 @@
-from fileinput import filename
-from time import strptime
-from gridfs import Database
-import xmltodict
-from pymongo import CursorType, MongoClient, InsertOne
-import os
+import argparse
 import datetime
-from datetime import datetime, tzinfo, timezone
+import os
+from datetime import datetime
+
 import dateutil.parser
+import xmltodict
+from pymongo import CursorType, InsertOne, MongoClient
 
 
-def get_database():
+def get_database(mongo_url):
 
-    CONNECTION_STRING = "mongodb://localhost:27017"
+    CONNECTION_STRING = "mongodb://"+ mongo_url
     client = MongoClient(CONNECTION_STRING)
     return client['upadb']
 
@@ -107,8 +106,7 @@ def db_upsert_data(mongodb_instance, cismessages_dir, canceledmessages_dir):
     # process_canceled_messages(mongodb_instance, canceledmessages_dir)
 
 
-def filter_data(collection:Database, from_station:str, to_station:str, datetime_string:str):
-    datetime_obj = datetime.strptime(datetime_string, '%Y-%m-%dT%H:%M:%S')
+def filter_data(collection, from_station:str, to_station:str, datetime_obj:datetime):
     timestring = datetime_obj.strftime("%H:%M:%S")
     date = datetime(datetime_obj.year, datetime_obj.month, datetime_obj.day)
     data= collection.aggregate([
@@ -198,9 +196,22 @@ def print_data(cursor:CursorType):
 
 
 if __name__ == "__main__":
-    mongodb_instance = get_database()
-    cismessages_dir = './archives'
-    canceledmessages_dir = './archives/canceled'
-    db_upsert_data(mongodb_instance, cismessages_dir, canceledmessages_dir)
-    cursor = filter_data(mongodb_instance["trains_timetable"], "Třebíč", "Brno hl. n.", "2022-10-22T15:00:0")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('odkud', type=str, help="název stanice odkud")
+    parser.add_argument('kam', type=str, help="název stanice kam")
+    parser.add_argument('kdy', type=str, help="datetime string pro čas nástupu ve stanici odkud (v libovolném rozumném formátu)")
+    parser.add_argument('--no_upsert', action="store_true", help="data se rovnou vyfiltrují z db.")
+    parser.add_argument('--mongodb_url', default="localhost:27017", help="url mongodb serveru (default: localhost:27017)")
+
+    args = parser.parse_args()
+    kdy = dateutil.parser.parse(args.kdy)
+
+    mongodb_instance = get_database(args.mongodb_url)
+
+    if not args.no_upsert:
+        cismessages_dir = './archives'
+        canceledmessages_dir = './archives/canceled'
+        db_upsert_data(mongodb_instance, cismessages_dir, canceledmessages_dir)
+
+    cursor = filter_data(mongodb_instance["trains_timetable"], args.odkud, args.kam, kdy)
     print_data(cursor)

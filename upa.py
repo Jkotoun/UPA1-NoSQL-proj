@@ -16,15 +16,14 @@ def get_database(mongo_url):
     return client['upadb']
 
 
+def push_dates_interval(startdate: datetime, enddate: datetime, dates_list: list):
+    dates_list.append({
+        'startdate': startdate,
+        'enddate': enddate
+    })
+    return dates_list
+
 def decode_bitmap(startdate: datetime, bitmap: str,  path_canceled_bit: str, path_not_canceled_bit: str):
-
-    def push_dates_interval(startdate: datetime, enddate: datetime, dates_list: list):
-        dates_list.append({
-            'startdate': startdate,
-            'enddate': enddate
-        })
-        return dates_list
-
     canceled_days_intervals = []
     canceled_bits_sequence = 0
 
@@ -65,9 +64,14 @@ def upsert_train_paths(mongodb_instance, cismessages_dir):
                 planned_calendar = train_path['CZPTTCISMessage']['CZPTTInformation']['PlannedCalendar']
                 planned_calendar_startdate = datetime.strptime(
                     planned_calendar['ValidityPeriod']['StartDateTime'], '%Y-%m-%dT%H:%M:%S')
+                planned_calendar_enddate = datetime.strptime(
+                    planned_calendar['ValidityPeriod']['EndDateTime'], '%Y-%m-%dT%H:%M:%S')
                 planned_calendar_bitmap = planned_calendar['BitmapDays']
                 train_path['canceled'] = decode_bitmap(
                     planned_calendar_startdate, planned_calendar_bitmap, path_canceled_bit='0', path_not_canceled_bit='1')
+                train_path['canceled'] = push_dates_interval(datetime(2021,10,1,0,0,0), planned_calendar_startdate, train_path['canceled'])
+                train_path['canceled'] = push_dates_interval(planned_calendar_enddate, datetime(2023,1,1,0,0,0), train_path['canceled'])
+
                 upserts.append( UpdateOne(
                         {'_id': xmlfilename},
                         {'$set': train_path,
@@ -177,8 +181,9 @@ def filter_data(collection, from_station:str, to_station:str, datetime_obj:datet
 def print_data(cursor:CursorType):
     def format_time_string(timestring):
        return dateutil.parser.parse(timestring).strftime("%H:%M:%S")
-
+    counter = 0
     for train in cursor:
+        counter+=1
         print(f"Train id: {train['_id']}")
         stops = train["stops"]
         times = train["times"]
@@ -190,6 +195,7 @@ def print_data(cursor:CursorType):
                 time_str = format_time_string(time["Time"])+"\t"
             print(f"{time_str}\t{stop}")
         print("------------------------------------------------------------")
+    print(counter)
 
 
 

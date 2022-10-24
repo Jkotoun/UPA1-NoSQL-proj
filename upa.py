@@ -179,7 +179,7 @@ def print_data(cursor:CursorType):
        return dateutil.parser.parse(timestring).strftime("%H:%M:%S")
 
     for train in cursor:
-        print(f"Train id: {train['_id']}")
+        print(f"Id vlaku: {train['_id']}")
         stops = train["stops"]
         times = train["times"]
         for stop,time in zip(stops, times):
@@ -199,13 +199,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('odkud', type=str, help="název stanice odkud")
     parser.add_argument('kam', type=str, help="název stanice kam")
-    parser.add_argument('kdy', type=str, help="datetime string pro čas nástupu ve stanici odkud (v libovolném rozumném formátu)")
+    parser.add_argument('datum_a_cas', type=str, help="datetime string pro čas nástupu ve stanici odkud (v libovolném rozumném formátu)")
     parser.add_argument('--no_upsert', action="store_true", help="data se rovnou vyfiltrují z db.")
     parser.add_argument('--no_download', action="store_true", help="data se nebudou stahovat z ftp serveru.")
     parser.add_argument('--mongodb_url', default="localhost:27017", help="url mongodb serveru (default: localhost:27017)")
 
     args = parser.parse_args()
-    kdy = dateutil.parser.parse(args.kdy)
+    kdy = dateutil.parser.parse(args.datum_a_cas)
 
     mongodb_instance = get_database(args.mongodb_url)
 

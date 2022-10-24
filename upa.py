@@ -1,6 +1,7 @@
 import argparse
 import datetime
 import os
+import file_sync
 from datetime import datetime, timedelta
 
 import dateutil.parser
@@ -200,6 +201,7 @@ if __name__ == "__main__":
     parser.add_argument('kam', type=str, help="název stanice kam")
     parser.add_argument('kdy', type=str, help="datetime string pro čas nástupu ve stanici odkud (v libovolném rozumném formátu)")
     parser.add_argument('--no_upsert', action="store_true", help="data se rovnou vyfiltrují z db.")
+    parser.add_argument('--no_download', action="store_true", help="data se nebudou stahovat z ftp serveru.")
     parser.add_argument('--mongodb_url', default="localhost:27017", help="url mongodb serveru (default: localhost:27017)")
 
     args = parser.parse_args()
@@ -211,6 +213,10 @@ if __name__ == "__main__":
         cismessages_dir = './archives'
         canceledmessages_dir = './archives/canceled'
         db_upsert_data(mongodb_instance, cismessages_dir, canceledmessages_dir)
+
+    if not args.no_download:
+        fs = file_sync.fileSynchronizator()
+        fs.get_all_xmls()
 
     cursor = filter_data(mongodb_instance["trains_timetable"], args.odkud, args.kam, kdy)
     print_data(cursor)

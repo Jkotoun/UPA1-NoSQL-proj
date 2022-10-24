@@ -9,7 +9,7 @@ from bs4 import SoupStrainer as ss
 
 class fileSynchronizator:
 
-    def __init__(self, url="https://portal.cisjr.cz", folder="archives/"):
+    def __init__(self, url="https://portal.cisjr.cz", folder="archives"):
 
         self.url = url
         self.folder = folder
@@ -18,8 +18,8 @@ class fileSynchronizator:
         if not os.path.exists(self.folder):
             os.makedirs(self.folder)
 
-            if not os.path.exists(self.folder+"canceled/"):
-                os.makedirs(self.folder+"canceled/")
+            if not os.path.exists(self.folder+"/canceled"):
+                os.makedirs(self.folder+"/canceled")
 
     def download_and_unzip(self, archiveName, remotePath, subFolder="", prefix = ""):
         # Get archive from ftp server

@@ -1,3 +1,5 @@
 pymongo
 xmltodict
 python-dateutil
+requests
+bs4

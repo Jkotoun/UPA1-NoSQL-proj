@@ -209,14 +209,14 @@ if __name__ == "__main__":
 
     mongodb_instance = get_database(args.mongodb_url)
 
-    if not args.no_upsert:
-        cismessages_dir = './archives'
-        canceledmessages_dir = './archives/canceled'
-        db_upsert_data(mongodb_instance, cismessages_dir, canceledmessages_dir)
-
+    cismessages_dir = './archives'
     if not args.no_download:
-        fs = file_sync.fileSynchronizator()
+        fs = file_sync.fileSynchronizator(folder=cismessages_dir)
         fs.get_all_xmls()
+
+    if not args.no_upsert:
+        db_upsert_data(mongodb_instance, cismessages_dir, f"{cismessages_dir}/canceled" )
+
 
     cursor = filter_data(mongodb_instance["trains_timetable"], args.odkud, args.kam, kdy)
     print_data(cursor)
